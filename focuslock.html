@@ -1,0 +1,1233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FocusLock — Proof of Concept</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --teal: #0d9488;
+    --teal-light: #ccfbf1;
+    --teal-mid: #5eead4;
+    --teal-dark: #134e4a;
+    --purple: #7c3aed;
+    --purple-light: #ede9fe;
+    --purple-mid: #a78bfa;
+    --purple-dark: #2e1065;
+    --amber: #d97706;
+    --amber-light: #fef3c7;
+    --amber-mid: #fbbf24;
+    --red: #dc2626;
+    --green: #059669;
+    --green-light: #d1fae5;
+    --surface: #f8fafc;
+    --surface-2: #f1f5f9;
+    --border: #e2e8f0;
+    --text: #0f172a;
+    --text-2: #475569;
+    --text-3: #94a3b8;
+    --font: 'DM Sans', sans-serif;
+    --mono: 'DM Mono', monospace;
+  }
+
+  body {
+    font-family: var(--font);
+    background: var(--surface);
+    color: var(--text);
+    min-height: 100vh;
+    font-size: 15px;
+    line-height: 1.5;
+  }
+
+  /* ── TOP NAV ── */
+  #top-nav {
+    background: white;
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 56px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .nav-logo {
+    font-weight: 600;
+    font-size: 16px;
+    color: var(--teal-dark);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-right: 16px;
+  }
+  .nav-logo svg { color: var(--teal); }
+  .nav-tabs { display: flex; gap: 4px; }
+  .nav-tab {
+    padding: 6px 16px;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+    color: var(--text-2);
+    background: none;
+    font-family: var(--font);
+  }
+  .nav-tab:hover { background: var(--surface-2); color: var(--text); }
+  .nav-tab.active {
+    background: var(--teal-dark);
+    color: white;
+    border-color: var(--teal-dark);
+  }
+  .nav-badge {
+    margin-left: auto;
+    font-size: 12px;
+    color: var(--text-3);
+    font-family: var(--mono);
+  }
+
+  /* ── VIEWS ── */
+  .view { display: none; }
+  .view.active { display: block; }
+
+  /* ── CLASSROOM VIEW ── */
+  #view-classroom {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 32px 24px;
+  }
+  .classroom-grid {
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    gap: 24px;
+    align-items: start;
+  }
+  .card {
+    background: white;
+    border-radius: 16px;
+    border: 1px solid var(--border);
+    padding: 24px;
+  }
+  .card-title {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-3);
+    margin-bottom: 16px;
+  }
+
+  /* Session control */
+  .session-status {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 18px;
+    border-radius: 12px;
+    background: var(--surface-2);
+    margin-bottom: 16px;
+    border: 1px solid var(--border);
+  }
+  .status-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: var(--text-3);
+    flex-shrink: 0;
+    transition: background 0.3s;
+  }
+  .status-dot.live {
+    background: var(--green);
+    box-shadow: 0 0 0 3px var(--green-light);
+    animation: pulse-dot 2s infinite;
+  }
+  @keyframes pulse-dot {
+    0%,100%{ box-shadow: 0 0 0 3px var(--green-light); }
+    50%{ box-shadow: 0 0 0 6px #d1fae5; }
+  }
+  .status-text { font-size: 14px; font-weight: 500; }
+  .status-sub { font-size: 12px; color: var(--text-3); margin-left: auto; font-family: var(--mono); }
+
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 10px 20px; border-radius: 10px;
+    font-size: 14px; font-weight: 500; cursor: pointer;
+    border: none; font-family: var(--font);
+    transition: all 0.15s; white-space: nowrap;
+  }
+  .btn-primary { background: var(--teal-dark); color: white; }
+  .btn-primary:hover { background: #0f3d3a; }
+  .btn-danger { background: #fef2f2; color: var(--red); border: 1px solid #fecaca; }
+  .btn-danger:hover { background: #fee2e2; }
+  .btn-ghost { background: var(--surface-2); color: var(--text-2); border: 1px solid var(--border); }
+  .btn-ghost:hover { background: var(--border); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* Slide content */
+  .lesson-slide {
+    background: linear-gradient(135deg, var(--teal-dark) 0%, var(--purple-dark) 100%);
+    border-radius: 14px;
+    padding: 40px;
+    color: white;
+    min-height: 220px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+    margin-bottom: 16px;
+  }
+  .slide-label {
+    font-size: 11px; font-weight: 600; letter-spacing: 0.1em;
+    text-transform: uppercase; opacity: 0.6; margin-bottom: 12px;
+  }
+  .slide-title { font-size: 26px; font-weight: 600; line-height: 1.3; }
+  .slide-sub { font-size: 14px; opacity: 0.7; margin-top: 10px; }
+  .slide-deco {
+    position: absolute; right: -20px; top: -20px;
+    width: 140px; height: 140px; border-radius: 50%;
+    background: rgba(255,255,255,0.05);
+  }
+  .slide-deco2 {
+    position: absolute; right: 40px; bottom: -30px;
+    width: 90px; height: 90px; border-radius: 50%;
+    background: rgba(255,255,255,0.04);
+  }
+
+  /* QR panel */
+  .qr-panel {
+    display: flex; flex-direction: column; align-items: center;
+    gap: 12px; padding: 24px;
+  }
+  #qrcode { border-radius: 8px; overflow: hidden; }
+  .qr-session-id {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-3);
+    text-align: center;
+  }
+  .qr-hint { font-size: 12px; color: var(--text-2); text-align: center; }
+
+  /* Student roster */
+  .roster-list { display: flex; flex-direction: column; gap: 8px; }
+  .roster-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px; border-radius: 10px;
+    background: var(--surface-2);
+    font-size: 14px;
+    transition: all 0.2s;
+  }
+  .roster-item.joined { background: var(--green-light); }
+  .roster-item.emergency { background: var(--amber-light); animation: flash-amber 1.5s infinite; }
+  @keyframes flash-amber {
+    0%,100%{ background: var(--amber-light); }
+    50%{ background: #fde68a; }
+  }
+  .roster-avatar {
+    width: 30px; height: 30px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 600; flex-shrink: 0;
+    background: var(--border); color: var(--text-2);
+  }
+  .roster-item.joined .roster-avatar { background: var(--teal-mid); color: var(--teal-dark); }
+  .roster-item.emergency .roster-avatar { background: var(--amber-mid); color: #78350f; }
+  .roster-name { flex: 1; font-weight: 500; }
+  .roster-status { font-size: 11px; color: var(--text-3); font-family: var(--mono); }
+  .roster-item.joined .roster-status { color: var(--green); }
+  .roster-item.emergency .roster-status { color: var(--amber); font-weight: 600; }
+
+  /* ── STUDENT PHONE VIEW ── */
+  #view-student {
+    display: none;
+    padding: 32px 24px;
+    justify-content: center;
+    align-items: flex-start;
+    min-height: calc(100vh - 56px);
+    gap: 40px;
+  }
+  #view-student.active { display: flex; }
+
+  .phone-picker {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 24px;
+    width: 280px;
+    flex-shrink: 0;
+  }
+  .phone-picker h3 { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+  .phone-picker p { font-size: 12px; color: var(--text-3); margin-bottom: 16px; }
+  .picker-list { display: flex; flex-direction: column; gap: 6px; }
+  .picker-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 12px; border-radius: 10px;
+    border: 1.5px solid var(--border);
+    cursor: pointer; transition: all 0.15s;
+    font-size: 13px; font-weight: 500;
+  }
+  .picker-item:hover { border-color: var(--teal); background: var(--teal-light); }
+  .picker-item.selected { border-color: var(--teal); background: var(--teal-light); color: var(--teal-dark); }
+  .picker-avatar {
+    width: 28px; height: 28px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 600;
+    background: var(--purple-light); color: var(--purple);
+  }
+  .picker-item.selected .picker-avatar { background: var(--teal-mid); color: var(--teal-dark); }
+
+  /* Phone frame */
+  .phone-frame {
+    width: 375px;
+    min-height: 700px;
+    background: #1a1a2e;
+    border-radius: 44px;
+    border: 8px solid #111;
+    box-shadow:
+      0 0 0 1px #333,
+      0 40px 80px rgba(0,0,0,0.35),
+      inset 0 0 0 1px rgba(255,255,255,0.06);
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+  }
+  .phone-notch {
+    width: 120px; height: 28px;
+    background: #111;
+    border-radius: 0 0 18px 18px;
+    margin: 0 auto;
+    position: relative; z-index: 10;
+    flex-shrink: 0;
+  }
+  .phone-time {
+    position: absolute; top: 8px; left: 20px;
+    font-size: 13px; font-weight: 600; color: white;
+    font-family: var(--mono);
+    z-index: 20;
+  }
+  .phone-icons {
+    position: absolute; top: 8px; right: 20px;
+    font-size: 11px; color: white; z-index: 20;
+    display: flex; gap: 4px; align-items: center;
+  }
+  .phone-screen {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* Idle screen */
+  #phone-idle {
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 20px; padding: 32px;
+    color: white;
+  }
+  .phone-idle-icon {
+    width: 72px; height: 72px; border-radius: 20px;
+    background: linear-gradient(135deg, var(--teal) 0%, var(--purple) 100%);
+    display: flex; align-items: center; justify-content: center;
+  }
+  #phone-idle h2 { font-size: 20px; font-weight: 600; text-align: center; }
+  #phone-idle p { font-size: 13px; opacity: 0.6; text-align: center; }
+  .join-btn {
+    background: linear-gradient(135deg, var(--teal) 0%, var(--purple) 100%);
+    color: white; border: none; border-radius: 14px;
+    padding: 16px 32px; font-size: 15px; font-weight: 600;
+    cursor: pointer; font-family: var(--font);
+    box-shadow: 0 8px 24px rgba(13,148,136,0.35);
+    transition: all 0.2s; width: 100%;
+  }
+  .join-btn:hover { transform: translateY(-1px); box-shadow: 0 12px 32px rgba(13,148,136,0.45); }
+  .join-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+  .no-session-hint { font-size: 11px; opacity: 0.4; text-align: center; font-family: var(--mono); }
+
+  /* Locked screen */
+  #phone-locked {
+    display: none;
+    flex: 1; flex-direction: column;
+    background: linear-gradient(170deg, #0a1628 0%, #1a0a2e 100%);
+  }
+  #phone-locked.active { display: flex; }
+  #phone-idle.hidden { display: none; }
+
+  .lock-header {
+    padding: 16px 20px 12px;
+    display: flex; align-items: center;
+    justify-content: space-between;
+  }
+  .lock-student-badge {
+    display: flex; align-items: center; gap: 8px;
+  }
+  .lock-avatar {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--teal) 0%, var(--purple) 100%);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700; color: white;
+  }
+  .lock-student-name { font-size: 13px; font-weight: 600; color: white; }
+  .lock-student-class { font-size: 11px; color: rgba(255,255,255,0.4); }
+  .lock-indicator {
+    display: flex; align-items: center; gap: 6px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 20px; padding: 4px 10px;
+  }
+  .lock-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--teal-mid); animation: pulse-dot 2s infinite; }
+  .lock-dot-text { font-size: 10px; color: rgba(255,255,255,0.7); font-weight: 600; letter-spacing: 0.05em; }
+
+  .lock-slide {
+    margin: 8px 16px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 16px;
+    padding: 24px 20px;
+    flex: 1;
+  }
+  .lock-slide-label { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--teal-mid); font-weight: 600; margin-bottom: 10px; }
+  .lock-slide-title { font-size: 18px; font-weight: 600; color: white; line-height: 1.35; margin-bottom: 8px; }
+  .lock-slide-body { font-size: 12px; color: rgba(255,255,255,0.5); line-height: 1.6; }
+  .lock-timer-row {
+    display: flex; align-items: center; justify-content: center;
+    gap: 8px; padding: 12px;
+    font-size: 12px; color: rgba(255,255,255,0.35);
+    font-family: var(--mono);
+  }
+
+  .emergency-strip {
+    margin: 0 16px 16px;
+    position: relative;
+  }
+  .emergency-btn {
+    width: 100%; padding: 14px;
+    background: rgba(217,119,6,0.15);
+    border: 1.5px solid rgba(217,119,6,0.4);
+    border-radius: 12px;
+    color: var(--amber-mid);
+    font-size: 13px; font-weight: 600;
+    cursor: pointer; font-family: var(--font);
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    transition: all 0.2s;
+  }
+  .emergency-btn:hover { background: rgba(217,119,6,0.25); border-color: var(--amber-mid); }
+  .emergency-active-bar {
+    display: none;
+    background: rgba(217,119,6,0.2);
+    border: 1.5px solid var(--amber-mid);
+    border-radius: 12px;
+    padding: 12px 16px;
+    color: var(--amber-mid);
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .emergency-active-bar.show { display: block; }
+  .emg-timer { font-family: var(--mono); font-size: 20px; font-weight: 600; color: white; }
+  .emg-label { font-size: 11px; opacity: 0.7; margin-top: 2px; }
+
+  /* Corner emergency timer (while unlocked) */
+  .corner-timer {
+    position: absolute; top: 40px; right: 12px;
+    background: var(--amber);
+    color: white; border-radius: 20px;
+    padding: 4px 10px; font-size: 11px;
+    font-family: var(--mono); font-weight: 600;
+    z-index: 50; display: none;
+  }
+  .corner-timer.show { display: block; animation: slide-in 0.3s ease; }
+  @keyframes slide-in { from { transform: translateX(20px); opacity: 0; } }
+
+  /* ── TEACHER DASHBOARD ── */
+  #view-teacher {
+    max-width: 1040px;
+    margin: 0 auto;
+    padding: 32px 24px;
+  }
+  .dash-grid {
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    gap: 24px;
+  }
+  .stats-row {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: 12px; margin-bottom: 24px;
+  }
+  .stat-card {
+    background: white; border: 1px solid var(--border);
+    border-radius: 14px; padding: 18px;
+  }
+  .stat-value { font-size: 28px; font-weight: 600; color: var(--teal-dark); line-height: 1; }
+  .stat-label { font-size: 12px; color: var(--text-3); margin-top: 4px; }
+  .stat-card.warn .stat-value { color: var(--amber); }
+  .stat-card.absent .stat-value { color: var(--text-3); }
+
+  /* Attendance table */
+  .att-table { width: 100%; border-collapse: collapse; }
+  .att-table th {
+    text-align: left; font-size: 11px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.07em;
+    color: var(--text-3); padding: 0 14px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .att-table td { padding: 12px 14px; font-size: 14px; border-bottom: 1px solid var(--surface-2); }
+  .att-row { transition: all 0.3s; }
+  .att-row.present td:first-child { border-left: 3px solid var(--green); }
+  .att-row.emergency td:first-child { border-left: 3px solid var(--amber); }
+  .att-row.absent td:first-child { border-left: 3px solid var(--border); }
+  .att-row.emergency { background: #fffbeb; animation: flash-amber 2s infinite; }
+  .badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 3px 10px; border-radius: 20px;
+    font-size: 11px; font-weight: 600;
+  }
+  .badge-present { background: var(--green-light); color: var(--green); }
+  .badge-absent { background: var(--surface-2); color: var(--text-3); }
+  .badge-emergency { background: var(--amber-light); color: var(--amber); }
+  .badge-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+  /* Session history */
+  .history-list { display: flex; flex-direction: column; gap: 10px; }
+  .history-item {
+    background: var(--surface-2); border-radius: 12px;
+    padding: 14px; border: 1px solid var(--border);
+  }
+  .history-date { font-size: 12px; font-weight: 600; color: var(--text-2); margin-bottom: 2px; }
+  .history-lesson { font-size: 13px; color: var(--text); }
+  .history-meta { font-size: 11px; color: var(--text-3); margin-top: 4px; font-family: var(--mono); }
+
+  /* Page header */
+  .page-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 24px;
+  }
+  .page-title { font-size: 22px; font-weight: 600; }
+  .page-sub { font-size: 13px; color: var(--text-3); margin-top: 2px; }
+
+  .divider { height: 1px; background: var(--border); margin: 20px 0; }
+
+  /* Toast */
+  #toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: var(--text); color: white;
+    padding: 12px 20px; border-radius: 12px;
+    font-size: 13px; font-weight: 500;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+    z-index: 999; display: none;
+    animation: toast-in 0.3s ease;
+  }
+  @keyframes toast-in { from { transform: translateX(-50%) translateY(12px); opacity: 0; } }
+
+  /* Utility */
+  .flex { display: flex; }
+  .gap-2 { gap: 8px; }
+  .mt-4 { margin-top: 16px; }
+  .text-sm { font-size: 13px; }
+  .text-xs { font-size: 11px; }
+  .text-muted { color: var(--text-3); }
+  .font-mono { font-family: var(--mono); }
+
+  @media (max-width: 700px) {
+    .classroom-grid, .dash-grid { grid-template-columns: 1fr; }
+    .stats-row { grid-template-columns: repeat(2,1fr); }
+    #view-student { flex-direction: column; align-items: center; }
+    .phone-picker { width: 100%; max-width: 375px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- TOP NAV -->
+<nav id="top-nav">
+  <div class="nav-logo">
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+      <rect x="3" y="3" width="14" height="14" rx="3" stroke="currentColor" stroke-width="1.5"/>
+      <path d="M7 10h6M10 7v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    </svg>
+    FocusLock
+  </div>
+  <div class="nav-tabs">
+    <button class="nav-tab active" onclick="switchView('classroom')">🖥 Classroom Device</button>
+    <button class="nav-tab" onclick="switchView('student')">📱 Student Phone</button>
+    <button class="nav-tab" onclick="switchView('teacher')">📊 Teacher Dashboard</button>
+  </div>
+  <span class="nav-badge" id="nav-badge">no session</span>
+</nav>
+
+<!-- ───────────── CLASSROOM VIEW ───────────── -->
+<div id="view-classroom" class="view active">
+  <div style="max-width:960px;margin:0 auto;padding:32px 24px">
+
+    <div class="page-header">
+      <div>
+        <div class="page-title">Classroom Device</div>
+        <div class="page-sub">Start a session to generate a QR code for students to scan</div>
+      </div>
+      <div class="flex gap-2">
+        <button class="btn btn-primary" id="btn-start" onclick="startSession()">▶ Start Session</button>
+        <button class="btn btn-danger" id="btn-end" onclick="endSession()" style="display:none">■ End Session</button>
+      </div>
+    </div>
+
+    <div class="session-status" id="session-status">
+      <div class="status-dot" id="status-dot"></div>
+      <span class="status-text" id="status-text">No active session</span>
+      <span class="status-sub" id="status-sub">—</span>
+    </div>
+
+    <div class="classroom-grid">
+      <!-- Left: lesson + roster -->
+      <div>
+        <!-- Lesson slide -->
+        <div class="card" style="margin-bottom:20px">
+          <div class="card-title">Lesson Content</div>
+          <div class="lesson-slide">
+            <div class="slide-deco"></div>
+            <div class="slide-deco2"></div>
+            <div class="slide-label">Today's Lesson</div>
+            <div class="slide-title" id="slide-title">The Water Cycle</div>
+            <div class="slide-sub" id="slide-sub">Evaporation · Condensation · Precipitation · Collection</div>
+          </div>
+          <div class="flex gap-2" style="flex-wrap:wrap">
+            <button class="btn btn-ghost text-sm" onclick="setLesson('The Water Cycle','Evaporation · Condensation · Precipitation · Collection')">Water Cycle</button>
+            <button class="btn btn-ghost text-sm" onclick="setLesson('Photosynthesis','How plants convert sunlight into energy')">Photosynthesis</button>
+            <button class="btn btn-ghost text-sm" onclick="setLesson('World War II — Key Events','1939–1945 · Europe & Pacific Theatres')">History</button>
+            <button class="btn btn-ghost text-sm" onclick="setLesson('Algebra: Quadratic Equations','ax² + bx + c = 0 · Solving by factoring & formula')">Maths</button>
+          </div>
+        </div>
+
+        <!-- Roster -->
+        <div class="card">
+          <div class="card-title" style="display:flex;justify-content:space-between">
+            <span>Students in Session</span>
+            <span class="font-mono text-xs text-muted" id="roster-count">0 / 6</span>
+          </div>
+          <div class="roster-list" id="roster-list">
+            <!-- Populated by JS -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: QR code -->
+      <div>
+        <div class="card">
+          <div class="card-title">Session QR Code</div>
+          <div class="qr-panel">
+            <div id="qrcode" style="background:white;padding:12px;border-radius:10px;display:inline-block"></div>
+            <div class="qr-session-id" id="qr-session-id">Start a session to generate QR</div>
+            <div class="qr-hint">Students scan this with the FocusLock app to join and lock their phones</div>
+          </div>
+        </div>
+
+        <div class="card mt-4">
+          <div class="card-title">Instructions</div>
+          <ol style="padding-left:18px;font-size:13px;color:var(--text-2);line-height:2">
+            <li>Press <strong>Start Session</strong></li>
+            <li>Ask students to open FocusLock on their phone</li>
+            <li>Students tap <strong>Scan QR</strong> to join</li>
+            <li>Their phones lock to the lesson content</li>
+            <li>Press <strong>End Session</strong> to unlock all phones</li>
+          </ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ───────────── STUDENT PHONE VIEW ───────────── -->
+<div id="view-student" class="view">
+
+  <!-- Student picker -->
+  <div class="phone-picker">
+    <h3>Simulating student</h3>
+    <p>Pick a student to simulate their phone experience</p>
+    <div class="picker-list" id="picker-list"></div>
+  </div>
+
+  <!-- Phone frame -->
+  <div class="phone-frame">
+    <div class="phone-time" id="phone-time">09:41</div>
+    <div class="phone-icons">▲ WiFi 🔋</div>
+    <div class="phone-notch"></div>
+    <div class="phone-screen">
+
+      <!-- Corner timer -->
+      <div class="corner-timer" id="corner-timer"></div>
+
+      <!-- Idle / pre-join -->
+      <div id="phone-idle">
+        <div class="phone-idle-icon">
+          <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+            <rect x="6" y="6" width="24" height="24" rx="5" stroke="white" stroke-width="2"/>
+            <path d="M12 18h12M18 12v12" stroke="white" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <h2>FocusLock</h2>
+        <p>Your teacher will start a session. Tap below to join and begin your lesson.</p>
+        <button class="join-btn" id="join-btn" onclick="studentJoin()" disabled>📷 Scan QR / Join Class</button>
+        <div class="no-session-hint" id="no-session-hint">Waiting for teacher to start session…</div>
+      </div>
+
+      <!-- Locked state -->
+      <div id="phone-locked">
+        <div class="lock-header">
+          <div class="lock-student-badge">
+            <div class="lock-avatar" id="lock-avatar">?</div>
+            <div>
+              <div class="lock-student-name" id="lock-student-name">Student</div>
+              <div class="lock-student-class">FocusLock Active</div>
+            </div>
+          </div>
+          <div class="lock-indicator">
+            <div class="lock-dot"></div>
+            <span class="lock-dot-text">LIVE</span>
+          </div>
+        </div>
+
+        <div class="lock-slide">
+          <div class="lock-slide-label">📚 Lesson in progress</div>
+          <div class="lock-slide-title" id="lock-slide-title">The Water Cycle</div>
+          <div class="lock-slide-body" id="lock-slide-body">Evaporation · Condensation · Precipitation · Collection</div>
+        </div>
+
+        <div class="lock-timer-row">
+          <span>🔒 Session active</span>
+          <span id="lock-session-timer" class="font-mono">—</span>
+        </div>
+
+        <div class="emergency-strip">
+          <button class="emergency-btn" id="emergency-btn" onclick="triggerEmergency()">
+            🚨 Emergency
+          </button>
+          <div class="emergency-active-bar" id="emg-bar">
+            <div class="flex" style="justify-content:space-between;align-items:center">
+              <div>
+                <div class="emg-timer" id="emg-countdown">5:00</div>
+                <div class="emg-label">Emergency window active</div>
+              </div>
+              <div style="text-align:right;font-size:11px;opacity:0.7">Teacher<br>notified</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ───────────── TEACHER DASHBOARD ───────────── -->
+<div id="view-teacher" class="view">
+  <div style="max-width:1040px;margin:0 auto;padding:32px 24px">
+
+    <div class="page-header">
+      <div>
+        <div class="page-title">Teacher Dashboard</div>
+        <div class="page-sub" id="dash-session-info">No active session</div>
+      </div>
+      <button class="btn btn-ghost text-sm" onclick="exportCSV()">⬇ Export Attendance CSV</button>
+    </div>
+
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-value" id="stat-present">0</div>
+        <div class="stat-label">Present</div>
+      </div>
+      <div class="stat-card warn">
+        <div class="stat-value" id="stat-emergency">0</div>
+        <div class="stat-label">Emergency</div>
+      </div>
+      <div class="stat-card absent">
+        <div class="stat-value" id="stat-absent">6</div>
+        <div class="stat-label">Not joined</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="stat-total">6</div>
+        <div class="stat-label">Total enrolled</div>
+      </div>
+    </div>
+
+    <div class="dash-grid">
+      <!-- Left: attendance table -->
+      <div class="card">
+        <div class="card-title">Live Attendance</div>
+        <table class="att-table">
+          <thead>
+            <tr>
+              <th>Student</th>
+              <th>Joined</th>
+              <th>Status</th>
+              <th>Note</th>
+            </tr>
+          </thead>
+          <tbody id="att-tbody"></tbody>
+        </table>
+      </div>
+
+      <!-- Right: session history -->
+      <div>
+        <div class="card">
+          <div class="card-title">Session History</div>
+          <div class="history-list">
+            <div class="history-item">
+              <div class="history-date">Tuesday, 3 Jun 2025</div>
+              <div class="history-lesson">Algebra: Linear Equations</div>
+              <div class="history-meta">5/6 present · 1 emergency · 45 min</div>
+            </div>
+            <div class="history-item">
+              <div class="history-date">Monday, 2 Jun 2025</div>
+              <div class="history-lesson">The Roman Empire</div>
+              <div class="history-meta">6/6 present · 0 emergency · 50 min</div>
+            </div>
+            <div class="history-item">
+              <div class="history-date">Friday, 30 May 2025</div>
+              <div class="history-lesson">Introduction to Biology</div>
+              <div class="history-meta">4/6 present · 2 emergency · 40 min</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card mt-4">
+          <div class="card-title">Emergency Log</div>
+          <div id="emergency-log" style="font-size:13px;color:var(--text-3)">No emergencies this session.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ══════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════
+const STUDENTS = [
+  { id: 's1', name: 'Aoife Murphy',    initials: 'AM' },
+  { id: 's2', name: 'Ciarán Kelly',    initials: 'CK' },
+  { id: 's3', name: 'Siobhán Walsh',   initials: 'SW' },
+  { id: 's4', name: 'Darragh Byrne',   initials: 'DB' },
+  { id: 's5', name: 'Niamh O\'Brien',  initials: 'NO' },
+  { id: 's6', name: 'Fionn Doyle',     initials: 'FD' },
+];
+
+const state = {
+  sessionActive: false,
+  sessionId: null,
+  sessionStart: null,
+  lesson: { title: 'The Water Cycle', sub: 'Evaporation · Condensation · Precipitation · Collection' },
+  students: {}, // id → { status: 'absent'|'present'|'emergency', joinTime, emergencyStart, emergencyTimer }
+  selectedStudent: null,
+  emergencyActive: false,
+  emergencyCountdown: null,
+};
+
+STUDENTS.forEach(s => {
+  state.students[s.id] = { status: 'absent', joinTime: null, emergencyStart: null };
+});
+
+// ══════════════════════════════════════
+//  UTILS
+// ══════════════════════════════════════
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.display = 'block';
+  clearTimeout(t._to);
+  t._to = setTimeout(() => t.style.display = 'none', 2800);
+}
+
+function fmt(ms) {
+  const s = Math.floor(ms / 1000);
+  const m = Math.floor(s / 60);
+  return `${m}:${String(s % 60).padStart(2, '0')}`;
+}
+
+function fmtTime(date) {
+  if (!date) return '—';
+  return date.toLocaleTimeString('en-IE', { hour: '2-digit', minute: '2-digit' });
+}
+
+function genSessionId() {
+  return 'FL-' + Math.random().toString(36).slice(2, 7).toUpperCase() + '-' + Date.now().toString(36).slice(-4).toUpperCase();
+}
+
+// Phone clock
+setInterval(() => {
+  const n = new Date();
+  document.getElementById('phone-time').textContent =
+    n.toLocaleTimeString('en-IE', { hour: '2-digit', minute: '2-digit' });
+}, 1000);
+
+// ══════════════════════════════════════
+//  VIEWS
+// ══════════════════════════════════════
+function switchView(v) {
+  document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
+  document.getElementById('view-' + v).classList.add('active');
+  document.querySelectorAll('.nav-tab').forEach((t, i) => {
+    t.classList.toggle('active', ['classroom','student','teacher'][i] === v);
+  });
+  if (v === 'student') renderPicker();
+  if (v === 'teacher') renderDashboard();
+  if (v === 'classroom') renderRoster();
+}
+
+// ══════════════════════════════════════
+//  CLASSROOM
+// ══════════════════════════════════════
+let qrInstance = null;
+
+function startSession() {
+  state.sessionActive = true;
+  state.sessionId = genSessionId();
+  state.sessionStart = new Date();
+
+  // Reset students
+  STUDENTS.forEach(s => {
+    state.students[s.id] = { status: 'absent', joinTime: null, emergencyStart: null };
+  });
+
+  // UI
+  document.getElementById('btn-start').style.display = 'none';
+  document.getElementById('btn-end').style.display = '';
+  document.getElementById('status-dot').classList.add('live');
+  document.getElementById('status-text').textContent = 'Session live';
+  document.getElementById('nav-badge').textContent = state.sessionId;
+
+  // QR
+  const qrEl = document.getElementById('qrcode');
+  qrEl.innerHTML = '';
+  qrInstance = new QRCode(qrEl, {
+    text: JSON.stringify({ sessionId: state.sessionId, lesson: state.lesson.title }),
+    width: 180, height: 180,
+    colorDark: '#134e4a', colorLight: '#ffffff',
+    correctLevel: QRCode.CorrectLevel.M
+  });
+  document.getElementById('qr-session-id').textContent = state.sessionId;
+
+  updateSessionStatus();
+  renderRoster();
+  renderDashboard();
+  toast('Session started — ' + state.sessionId);
+
+  // Tick
+  clearInterval(window._sessionTick);
+  window._sessionTick = setInterval(updateSessionStatus, 1000);
+}
+
+function endSession() {
+  state.sessionActive = false;
+  clearInterval(window._sessionTick);
+
+  document.getElementById('btn-start').style.display = '';
+  document.getElementById('btn-end').style.display = 'none';
+  document.getElementById('status-dot').classList.remove('live');
+  document.getElementById('status-text').textContent = 'No active session';
+  document.getElementById('status-sub').textContent = '—';
+  document.getElementById('nav-badge').textContent = 'no session';
+  document.getElementById('qr-session-id').textContent = 'Start a session to generate QR';
+  document.getElementById('qrcode').innerHTML = '';
+
+  // Unlock student phone if active
+  if (document.getElementById('phone-locked').classList.contains('active')) {
+    studentLeave();
+  }
+
+  // Disable join
+  document.getElementById('join-btn').disabled = true;
+  document.getElementById('no-session-hint').textContent = 'Waiting for teacher to start session…';
+
+  renderRoster();
+  renderDashboard();
+  toast('Session ended');
+}
+
+function updateSessionStatus() {
+  if (!state.sessionActive) return;
+  const elapsed = Date.now() - state.sessionStart;
+  const joined = STUDENTS.filter(s => state.students[s.id].status !== 'absent').length;
+  document.getElementById('status-sub').textContent =
+    `${joined}/6 students · ${fmt(elapsed)}`;
+
+  // Update lock screen timer
+  if (state.selectedStudent && state.students[state.selectedStudent]?.status !== 'absent') {
+    document.getElementById('lock-session-timer').textContent = fmt(elapsed);
+  }
+  renderRoster();
+  renderDashboard();
+}
+
+function setLesson(title, sub) {
+  state.lesson = { title, sub };
+  document.getElementById('slide-title').textContent = title;
+  document.getElementById('slide-sub').textContent = sub;
+  // Update lock screen too
+  document.getElementById('lock-slide-title').textContent = title;
+  document.getElementById('lock-slide-body').textContent = sub;
+  if (state.sessionActive && qrInstance) {
+    const qrEl = document.getElementById('qrcode');
+    qrEl.innerHTML = '';
+    new QRCode(qrEl, {
+      text: JSON.stringify({ sessionId: state.sessionId, lesson: title }),
+      width: 180, height: 180,
+      colorDark: '#134e4a', colorLight: '#ffffff',
+    });
+  }
+}
+
+function renderRoster() {
+  const list = document.getElementById('roster-list');
+  const joined = STUDENTS.filter(s => state.students[s.id].status !== 'absent').length;
+  document.getElementById('roster-count').textContent = `${joined} / 6`;
+  list.innerHTML = STUDENTS.map(s => {
+    const st = state.students[s.id];
+    let cls = '', statusTxt = 'Not joined';
+    if (st.status === 'present') { cls = 'joined'; statusTxt = 'Joined ' + fmtTime(st.joinTime); }
+    if (st.status === 'emergency') { cls = 'emergency'; statusTxt = '🚨 EMERGENCY'; }
+    return `<div class="roster-item ${cls}">
+      <div class="roster-avatar">${s.initials}</div>
+      <span class="roster-name">${s.name}</span>
+      <span class="roster-status">${statusTxt}</span>
+    </div>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════
+//  STUDENT PHONE
+// ══════════════════════════════════════
+function renderPicker() {
+  const list = document.getElementById('picker-list');
+  list.innerHTML = STUDENTS.map(s => {
+    const st = state.students[s.id];
+    const joined = st.status !== 'absent';
+    return `<div class="picker-item ${state.selectedStudent === s.id ? 'selected' : ''}" onclick="selectStudent('${s.id}')">
+      <div class="picker-avatar">${s.initials}</div>
+      ${s.name}
+      ${joined ? '<span style="margin-left:auto;font-size:11px;color:var(--green)">✓ In</span>' : ''}
+    </div>`;
+  }).join('');
+
+  // Update join button
+  const joinBtn = document.getElementById('join-btn');
+  const hint = document.getElementById('no-session-hint');
+  if (state.sessionActive && state.selectedStudent) {
+    const st = state.students[state.selectedStudent];
+    if (st.status === 'absent') {
+      joinBtn.disabled = false;
+      joinBtn.textContent = '📷 Scan QR / Join Class';
+      hint.textContent = 'Session active — tap to join!';
+    } else {
+      joinBtn.disabled = true;
+    }
+  } else if (!state.sessionActive) {
+    joinBtn.disabled = true;
+    hint.textContent = 'Waiting for teacher to start session…';
+  } else {
+    joinBtn.disabled = true;
+    hint.textContent = 'Select a student above';
+  }
+}
+
+function selectStudent(id) {
+  state.selectedStudent = id;
+  renderPicker();
+
+  // If this student is currently in session, show locked state
+  const st = state.students[id];
+  const s = STUDENTS.find(x => x.id === id);
+  if (st.status !== 'absent') {
+    showLockedScreen(s);
+  } else {
+    document.getElementById('phone-locked').classList.remove('active');
+    document.getElementById('phone-idle').classList.remove('hidden');
+    document.getElementById('phone-idle').style.display = 'flex';
+  }
+}
+
+function studentJoin() {
+  if (!state.sessionActive || !state.selectedStudent) return;
+  const id = state.selectedStudent;
+  const s = STUDENTS.find(x => x.id === id);
+  state.students[id] = { status: 'present', joinTime: new Date(), emergencyStart: null };
+
+  showLockedScreen(s);
+  renderRoster();
+  renderDashboard();
+  renderPicker();
+  toast(s.name + ' joined the session');
+}
+
+function showLockedScreen(s) {
+  document.getElementById('phone-idle').classList.add('hidden');
+  document.getElementById('phone-idle').style.display = 'none';
+
+  const locked = document.getElementById('phone-locked');
+  locked.classList.add('active');
+
+  document.getElementById('lock-avatar').textContent = s.initials;
+  document.getElementById('lock-student-name').textContent = s.name;
+  document.getElementById('lock-slide-title').textContent = state.lesson.title;
+  document.getElementById('lock-slide-body').textContent = state.lesson.sub;
+
+  // Reset emergency UI
+  document.getElementById('emergency-btn').style.display = 'flex';
+  document.getElementById('emg-bar').classList.remove('show');
+  document.getElementById('corner-timer').classList.remove('show');
+}
+
+function studentLeave() {
+  document.getElementById('phone-locked').classList.remove('active');
+  document.getElementById('phone-idle').classList.remove('hidden');
+  document.getElementById('phone-idle').style.display = 'flex';
+  clearInterval(state.emergencyCountdown);
+  state.emergencyActive = false;
+  document.getElementById('emergency-btn').style.display = 'flex';
+  document.getElementById('emg-bar').classList.remove('show');
+  document.getElementById('corner-timer').classList.remove('show');
+  document.getElementById('join-btn').disabled = true;
+}
+
+function triggerEmergency() {
+  if (state.emergencyActive) return;
+  if (!state.selectedStudent) return;
+  state.emergencyActive = true;
+
+  const id = state.selectedStudent;
+  state.students[id].status = 'emergency';
+  state.students[id].emergencyStart = new Date();
+
+  document.getElementById('emergency-btn').style.display = 'none';
+  document.getElementById('emg-bar').classList.add('show');
+  document.getElementById('corner-timer').classList.add('show');
+
+  let secs = 300;
+  const updateEmg = () => {
+    const m = Math.floor(secs / 60);
+    const s = String(secs % 60).padStart(2, '0');
+    const str = `${m}:${s}`;
+    document.getElementById('emg-countdown').textContent = str;
+    document.getElementById('corner-timer').textContent = str;
+    secs--;
+    if (secs < 0) {
+      clearInterval(state.emergencyCountdown);
+      state.emergencyActive = false;
+      state.students[id].status = 'present';
+      document.getElementById('emergency-btn').style.display = 'flex';
+      document.getElementById('emg-bar').classList.remove('show');
+      document.getElementById('corner-timer').classList.remove('show');
+      renderRoster(); renderDashboard();
+      toast('Emergency window expired — phone re-locked');
+    }
+  };
+  updateEmg();
+  state.emergencyCountdown = setInterval(updateEmg, 1000);
+
+  renderRoster(); renderDashboard();
+  toast('🚨 Emergency activated — teacher notified');
+}
+
+// ══════════════════════════════════════
+//  TEACHER DASHBOARD
+// ══════════════════════════════════════
+function renderDashboard() {
+  const present = STUDENTS.filter(s => state.students[s.id].status === 'present').length;
+  const emergency = STUDENTS.filter(s => state.students[s.id].status === 'emergency').length;
+  const absent = STUDENTS.filter(s => state.students[s.id].status === 'absent').length;
+
+  document.getElementById('stat-present').textContent = present;
+  document.getElementById('stat-emergency').textContent = emergency;
+  document.getElementById('stat-absent').textContent = absent;
+
+  document.getElementById('dash-session-info').textContent = state.sessionActive
+    ? `Session ${state.sessionId} · started ${fmtTime(state.sessionStart)}`
+    : 'No active session';
+
+  const tbody = document.getElementById('att-tbody');
+  tbody.innerHTML = STUDENTS.map(s => {
+    const st = state.students[s.id];
+    let badgeHtml, note = '—';
+    if (st.status === 'present') {
+      badgeHtml = `<span class="badge badge-present"><span class="badge-dot"></span>Present</span>`;
+    } else if (st.status === 'emergency') {
+      const el = document.getElementById('emg-countdown');
+      const remaining = el ? el.textContent : '—';
+      badgeHtml = `<span class="badge badge-emergency"><span class="badge-dot"></span>🔔 Emergency</span>`;
+      note = `${remaining} remaining`;
+    } else {
+      badgeHtml = `<span class="badge badge-absent">Absent</span>`;
+    }
+    return `<tr class="att-row ${st.status}">
+      <td><strong>${s.name}</strong></td>
+      <td class="font-mono" style="font-size:13px">${fmtTime(st.joinTime)}</td>
+      <td>${badgeHtml}</td>
+      <td style="font-size:12px;color:var(--text-3)">${note}</td>
+    </tr>`;
+  }).join('');
+
+  // Emergency log
+  const emgStudents = STUDENTS.filter(s => state.students[s.id].emergencyStart);
+  const emgLog = document.getElementById('emergency-log');
+  if (emgStudents.length === 0) {
+    emgLog.textContent = 'No emergencies this session.';
+  } else {
+    emgLog.innerHTML = emgStudents.map(s =>
+      `<div style="padding:8px 0;border-bottom:1px solid var(--border)">
+        <strong>${s.name}</strong>
+        <span style="color:var(--text-3);margin-left:8px;font-size:12px">
+          at ${fmtTime(state.students[s.id].emergencyStart)}
+        </span>
+      </div>`
+    ).join('');
+  }
+}
+
+// ══════════════════════════════════════
+//  CSV EXPORT
+// ══════════════════════════════════════
+function exportCSV() {
+  const rows = [['Name', 'Status', 'Joined At', 'Emergency At']];
+  STUDENTS.forEach(s => {
+    const st = state.students[s.id];
+    rows.push([
+      s.name,
+      st.status,
+      st.joinTime ? fmtTime(st.joinTime) : '',
+      st.emergencyStart ? fmtTime(st.emergencyStart) : ''
+    ]);
+  });
+  const csv = rows.map(r => r.map(c => `"${c}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `attendance-${state.sessionId || 'export'}.csv`;
+  a.click(); URL.revokeObjectURL(url);
+  toast('Attendance CSV downloaded');
+}
+
+// ══════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════
+renderRoster();
+renderDashboard();
+
+// Trigger session status update every second when active
+setInterval(() => {
+  if (state.sessionActive) {
+    renderDashboard();
+    // Enable join btn if session just started
+    if (state.selectedStudent && state.students[state.selectedStudent].status === 'absent') {
+      document.getElementById('join-btn').disabled = false;
+      document.getElementById('no-session-hint').textContent = 'Session active — tap to join!';
+      document.getElementById('join-btn').textContent = '📷 Scan QR / Join Class';
+    }
+  }
+}, 1000);
+</script>
+</body>
+</html>
